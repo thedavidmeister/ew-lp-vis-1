@@ -3,6 +3,7 @@
            [hoplon.svg :as svg]
            [thi.ng.ndarray.core :as nd]))
 
+(def animation-speed 2000)
 
 (defn pareto
  [xm a]
@@ -10,8 +11,8 @@
 
 (defn rand-size
  [n]
- (min (/ n 2)
-      (pareto 1 2)))
+ (min n
+      (pareto 1 0.75)))
 
 (defn n
  [total per-item]
@@ -21,37 +22,55 @@
  [{:keys [height width spacing fg bg]} _]
  (let [n-rows (n width spacing)
        n-cols (n height spacing)
-       rand-arr (nd/ndarray
-                 :int8
-                 (repeatedly (* n-rows n-cols) #(rand-size (quot spacing 2)))
-                 [n-rows n-cols])]
-  (svg/svg
-   :height height
-   :width width
-   :css {:background-color bg}
+       gen-rand-array (fn []
+                       (nd/ndarray
+                        :int8
+                        (repeatedly
+                         (* n-rows n-cols)
+                         #(rand-size spacing))
+                        [n-rows n-cols]))
+       rand-arr (cell (gen-rand-array))
+       x-y-r (cell= (map (fn [[x y]]
+                          [(* x spacing)
+                           (* y spacing)
+                           (/ (dec (nd/pick rand-arr x y))
+                              2)])
+                         (nd/position-seq rand-arr)))]
 
-   (map
-    (fn [[x y]]
-     (let [r (/ (dec (nd/pick rand-arr x y))
-                2)
-           x-px (* x spacing)
-           y-px (* y spacing)]
-      (svg/circle
-       :fill fg
-       :cx x-px
-       :cy y-px
-       :r r)))
+  (with-interval animation-speed (swap! rand-arr gen-rand-array))
 
-    (nd/position-seq rand-arr)))))
+  (letfn [(circle [x y]
+           (let [calc-r #(/ (dec (nd/pick @rand-arr @x @y))
+                            2)
+                 r (cell (calc-r))]
+            (with-timeout
+             (* animation-speed (rand))
+             (with-interval animation-speed (swap! r calc-r)))
+
+            (svg/circle
+             :fill fg
+             :cx (cell= (* spacing x))
+             :cy (cell= (* spacing y))
+             :r (cell= r))))]
+
+   [
+    (style (str "circle { transition: all " (/ animation-speed (quot 1000 2)) "s linear; }"))
+    (svg/svg
+     :height height
+     :width width
+     :css {:background-color bg}
+
+     (for-tpl [[x y] (cell= (nd/position-seq rand-arr))]
+      (circle x y)))])))
 
 (html
   (head
     (link :href "app.css" :rel "stylesheet"))
   (body
     (vis
-     :height 1000
-     :width 1000
-     :spacing 50
+     :height (.-innerHeight js/window)
+     :width (.-innerWidth js/window)
+     :spacing 20
      :bg "#102769"
-     :fg "#ff8140")
-    (div "thingzzz")))
+     :fg "#ff8140")))
+     ; :fg "#fff")))
