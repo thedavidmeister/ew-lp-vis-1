@@ -13,12 +13,6 @@
  (min (/ n 2)
       (pareto 1 2)))
 
-(defn low-pass-filter
- [v l]
- (if (<= v l)
-     0
-     v))
-
 (defn n
  [total per-item]
  (inc (quot total per-item)))
