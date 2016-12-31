@@ -3,9 +3,21 @@
            [hoplon.svg :as svg]
            [thi.ng.ndarray.core :as nd]))
 
-(defn rand'
- []
- (rand-int 5))
+
+(defn pareto
+ [xm a]
+ (/ xm (.pow js/Math (rand) (/ 1 a))))
+
+(defn rand-size
+ [n]
+ (min (/ n 2)
+      (pareto 1 2)))
+
+(defn low-pass-filter
+ [v l]
+ (if (<= v l)
+     0
+     v))
 
 (defn n
  [total per-item]
@@ -13,41 +25,47 @@
 
 (defn row
  [width spacing]
- (repeatedly (n width spacing) rand'))
+ (repeatedly (n width spacing) rand-size))
 
 (defn rows
  [height width spacing]
  (repeatedly (n height spacing) #(row width spacing)))
 
 (defelem vis
- [{:keys [height width spacing]} _]
+ [{:keys [height width spacing fg bg]} _]
  (let [n-rows (n width spacing)
        n-cols (n height spacing)
-       rand-arr (nd/ndarray :int8 (repeatedly (* n-rows n-cols) rand') [n-rows n-cols])]
-  (prn (seq rand-arr))
-  (prn (nd/position-seq rand-arr))
-  (prn (nd/pick rand-arr 1 0))
+       rand-arr (nd/ndarray
+                 :int8
+                 (repeatedly (* n-rows n-cols) #(rand-size (quot spacing 2)))
+                 [n-rows n-cols])]
   (svg/svg
    :height height
    :width width
+   :css {:background-color bg}
 
    (map
     (fn [[x y]]
-     (let [r (nd/pick rand-arr x y)
-           x-px (+ r (* x spacing))
-           y-px (+ r (* y spacing))]
+     (let [r (/ (dec (nd/pick rand-arr x y))
+                2)
+           x-px (* x spacing)
+           y-px (* y spacing)]
       (svg/circle
+       :fill fg
        :cx x-px
        :cy y-px
        :r r)))
 
     (nd/position-seq rand-arr)))))
 
-
-
 (html
   (head
     (link :href "app.css" :rel "stylesheet"))
   (body
-    (vis :height 300 :width 600 :spacing 50)
+    (vis
+     :height 1000
+     :width 1000
+     :spacing 50
+     :bg "#102769"
+     :fg "#ff8140")
     (div "thingzzz")))
