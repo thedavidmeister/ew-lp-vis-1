@@ -23,14 +23,6 @@
  [total per-item]
  (inc (quot total per-item)))
 
-(defn row
- [width spacing]
- (repeatedly (n width spacing) rand-size))
-
-(defn rows
- [height width spacing]
- (repeatedly (n height spacing) #(row width spacing)))
-
 (defelem vis
  [{:keys [height width spacing fg bg]} _]
  (let [n-rows (n width spacing)
