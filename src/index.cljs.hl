@@ -3,7 +3,13 @@
            [hoplon.svg :as svg]
            [thi.ng.ndarray.core :as nd]))
 
-(def animation-speed 2000)
+(def bg "#102769")
+(def fg "#ff8140")
+; (def fg "#fff")
+; http://easings.net/#easeOutBack
+(def easing "cubic-bezier(0.175, 0.885, 0.32, 1.275)")
+
+(def animation-speed 5000)
 
 (defn pareto
  [xm a]
@@ -17,6 +23,12 @@
 (defn n
  [total per-item]
  (inc (quot total per-item)))
+
+(defn low-pass
+ [v l]
+ (if (<= v l)
+     0
+     v))
 
 (defelem vis
  [{:keys [height width spacing fg bg]} _]
@@ -37,28 +49,39 @@
                               2)])
                          (nd/position-seq rand-arr)))]
 
+  (swap! rand-arr gen-rand-array)
   (with-interval animation-speed (swap! rand-arr gen-rand-array))
 
   (letfn [(circle [x y]
            (let [calc-r #(/ (dec (nd/pick @rand-arr @x @y))
                             2)
-                 r (cell (calc-r))]
-            (with-timeout
-             (* animation-speed (rand))
-             (with-interval animation-speed (swap! r calc-r)))
+                 r (cell (calc-r))
+                 delay-rand (* animation-speed (rand))
+                 delay-total (+ animation-speed delay-rand)]
+
+            (with-timeout delay-rand (swap! r calc-r))
+            (with-interval
+             delay-total
+             (swap! r calc-r))
 
             (svg/circle
              :fill fg
              :cx (cell= (* spacing x))
              :cy (cell= (* spacing y))
-             :r (cell= r))))]
+             :r (cell= (low-pass (/ (* r y spacing) height)
+                                 0.5)))))]
 
    [
-    (style (str "circle { transition: all " (/ animation-speed (quot 1000 2)) "s linear; }"))
+    (style (str "circle { "
+                "transition: all " (/ animation-speed 1000) "s " easing ";"
+                " }"))
+
+
     (svg/svg
      :height height
      :width width
-     :css {:background-color bg}
+     :css {:background-color bg
+           :filter "blur(0.5px)"}
 
      (for-tpl [[x y] (cell= (nd/position-seq rand-arr))]
       (circle x y)))])))
@@ -67,10 +90,13 @@
   (head
     (link :href "app.css" :rel "stylesheet"))
   (body
-    (vis
-     :height (.-innerHeight js/window)
-     :width (.-innerWidth js/window)
-     :spacing 20
-     :bg "#102769"
-     :fg "#ff8140")))
-     ; :fg "#fff")))
+   :css {:background-color bg}
+    (div
+     :css {:position "fixed" :bottom 0}
+
+     (vis
+      :height (/ (.-innerHeight js/window) 2.5)
+      :width (.-innerWidth js/window)
+      :spacing 20
+      :bg bg
+      :fg fg))))
