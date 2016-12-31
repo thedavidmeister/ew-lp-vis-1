@@ -1,7 +1,53 @@
-(page "index.html")
+(page "index.html"
+ (:require [el.landing-page-vis.dom]
+           [hoplon.svg :as svg]
+           [thi.ng.ndarray.core :as nd]))
+
+(defn rand'
+ []
+ (rand-int 5))
+
+(defn n
+ [total per-item]
+ (inc (quot total per-item)))
+
+(defn row
+ [width spacing]
+ (repeatedly (n width spacing) rand'))
+
+(defn rows
+ [height width spacing]
+ (repeatedly (n height spacing) #(row width spacing)))
+
+(defelem vis
+ [{:keys [height width spacing]} _]
+ (let [n-rows (n width spacing)
+       n-cols (n height spacing)
+       rand-arr (nd/ndarray :int8 (repeatedly (* n-rows n-cols) rand') [n-rows n-cols])]
+  (prn (seq rand-arr))
+  (prn (nd/position-seq rand-arr))
+  (prn (nd/pick rand-arr 1 0))
+  (svg/svg
+   :height height
+   :width width
+
+   (map
+    (fn [[x y]]
+     (let [r (nd/pick rand-arr x y)
+           x-px (+ r (* x spacing))
+           y-px (+ r (* y spacing))]
+      (svg/circle
+       :cx x-px
+       :cy y-px
+       :r r)))
+
+    (nd/position-seq rand-arr)))))
+
+
 
 (html
   (head
     (link :href "app.css" :rel "stylesheet"))
   (body
-    (h1 "Hello, Hoplon!")))
+    (vis :height 300 :width 600 :spacing 50)
+    (div "thingzzz")))
