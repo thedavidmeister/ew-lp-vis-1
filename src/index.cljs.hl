@@ -72,7 +72,7 @@
 
                  (letfn [(tween-scale []
                           (let [next-scale (-> ; Set the base distribution.
-                                               (pareto 1 1)
+                                               (pareto 1 0.75)
                                                ; Scale down based on typical
                                                ; vals from pareto to get closer
                                                ; to about 1.
