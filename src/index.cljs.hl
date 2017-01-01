@@ -12,10 +12,11 @@
 ; http://easings.net/#easeOutBack
 (def easing "cubic-bezier(0.175, 0.885, 0.32, 1.275)")
 
-(def animation-speed 5000)
+(def animation-speed 3000)
 
 (def pareto-a (+ 0.1 (rand)))
 (defn pareto
+ ([] (pareto 1))
  ([xm] (pareto xm nil))
  ([xm a]
   (let [a (or a pareto-a)]
@@ -24,7 +25,7 @@
 (defn rand-size
  [n]
  (min n
-      (pareto 1)))
+      (pareto)))
 
 (defn n
  [total per-item]
@@ -45,22 +46,43 @@
                                                                     :antialias true
                                                                     :resolution 1
                                                                     :clearBeforeRender true}))
-       circle (doto (js/PIXI.Graphics.)
-                    (.beginFill fg)
-                    (.drawCircle (* width (rand))
-                                 (* height (rand))
-                                 5)
-                    (.endFill))]
+       stage (js/PIXI.Container.)
+       circle (fn [stage x-coord y-coord r]
+               (let [x-px (* x-coord spacing)
+                     y-px (* y-coord spacing)]
+                (with-let [c (doto (js/PIXI.Graphics.)
+                                   (.beginFill fg)
+                                   (.drawCircle 0 0 1)
+                                   (.endFill))]
 
-  (with-interval
-   1000
-   (-> circle .-x (set! (* width (rand) 0.5)))
-   (-> circle .-y (set! (* height (rand) 0.5))))
+                 ; Use position of the graphics instead of x/y of the circle to
+                 ; make scaling work as centered.
+                 ; https://stackoverflow.com/questions/27807718/scale-to-a-specific-point-in-pixi-js
+                 (-> c .-position (.set x-px y-px))
 
-  (letfn [(frame []
-           (.render renderer circle)
+                 ; Append the circle to the main stage for rendering.
+                 (.addChild stage c)
 
-           (.requestAnimationFrame js/window frame))]
+                 (letfn [(tween-scale []
+                          (let [next-scale (min (* spacing
+                                                   (/ (pareto 1 1) 10))
+                                                spacing)]
+                           (prn spacing next-scale)
+                           (doto (js/TWEEN.Tween. (-> c .-scale))
+                                 (.to
+                                  (clj->js {:x next-scale :y next-scale})
+                                  animation-speed)
+                                 (.onUpdate #(this-as this
+                                              (-> c .-scale (.set (.-x this) (.-y this)))))
+                                 (.onComplete tween-scale)
+                                 (.start))))]
+                  (tween-scale)))))]
+
+  (circle stage 20 20 spacing)
+  (letfn [(frame [t]
+           (.requestAnimationFrame js/window frame)
+           (.update js/TWEEN t)
+           (.render renderer stage))]
    (.requestAnimationFrame js/window frame))
   (.-view renderer)))
 
@@ -132,14 +154,3 @@
     :spacing 10
     :bg bg
     :fg fg)))
-
-    ; (div
-    ;  :css {:position "fixed" :bottom 0
-    ;        :background-color fg})))
-
-     ; (vis
-     ;  :height (/ (.-innerHeight js/window) 2.5)
-     ;  :width (.-innerWidth js/window)
-     ;  :spacing 10
-     ;  :bg bg
-     ;  :fg fg))))
