@@ -41,21 +41,24 @@
  (let [pixi-colour (fn [c] @(col/as-int24 (col/css c)))
        bg (pixi-colour bg)
        fg (pixi-colour fg)
-       renderer (js/PIXI.autoDetectRenderer. width height (clj->js {:backgroundColor bg
-                                                                    :antialias true}))
-       graphics (js/PIXI.Graphics.)]
+       renderer (js/PIXI.autoDetectRenderer. width height (clj->js {:transparent true
+                                                                    :antialias true
+                                                                    :resolution 1
+                                                                    :clearBeforeRender true}))
+       circle (doto (js/PIXI.Graphics.)
+                    (.beginFill fg)
+                    (.drawCircle (* width (rand))
+                                 (* height (rand))
+                                 5)
+                    (.endFill))]
 
+  (with-interval
+   1000
+   (-> circle .-x (set! (* width (rand) 0.5)))
+   (-> circle .-y (set! (* height (rand) 0.5))))
 
   (letfn [(frame []
-           (.beginFill graphics fg)
-           (.drawCircle
-            graphics
-            (* width (rand))
-            (* height (rand))
-            5)
-           (.endFill graphics)
-           
-           (.render renderer graphics)
+           (.render renderer circle)
 
            (.requestAnimationFrame js/window frame))]
    (.requestAnimationFrame js/window frame))
