@@ -5,7 +5,8 @@
                   [org.clojure/clojure       "1.8.0"]
                   [org.clojure/clojurescript "1.9.293"]
                   [tailrecursion/boot-jetty  "0.1.3"]
-                  [thi.ng/ndarray "0.3.2"]]
+                  [thi.ng/ndarray "0.3.2"]
+                  [cljsjs/pixi "4.0.3-0"]]
 
   :source-paths #{"src"}
   :asset-paths  #{"assets"})

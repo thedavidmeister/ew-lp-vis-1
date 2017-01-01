@@ -1,7 +1,8 @@
 (page "index.html"
  (:require [el.landing-page-vis.dom]
            [hoplon.svg :as svg]
-           [thi.ng.ndarray.core :as nd]))
+           [thi.ng.ndarray.core :as nd]
+           [cljsjs.pixi]))
 
 (def bg "#102769")
 (def fg "#ff8140")
@@ -32,6 +33,11 @@
  (if (<= v l)
      0
      v))
+
+(defelem pixi
+ [{:keys [height width spacing fb bg]} _]
+ (let [renderer (js/PIXI.autoDetectRenderer. width height)]
+  (.-view renderer)))
 
 (defelem vis
  [{:keys [height width spacing fg bg]} _]
@@ -94,13 +100,21 @@
     (link :href "app.css" :rel "stylesheet"))
   (body
    :css {:background-color bg}
-    (div
-     :css {:position "fixed" :bottom 0
-           :background-color fg}
 
-     (vis
-      :height (/ (.-innerHeight js/window) 2.5)
-      :width (.-innerWidth js/window)
-      :spacing 10
-      :bg bg
-      :fg fg))))
+   (pixi
+    :height (/ (.-innerHeight js/window) 3)
+    :width (.-innerWidth js/window)
+    :spacing 10
+    :bg bg
+    :fg fg)))
+
+    ; (div
+    ;  :css {:position "fixed" :bottom 0
+    ;        :background-color fg})))
+
+     ; (vis
+     ;  :height (/ (.-innerHeight js/window) 2.5)
+     ;  :width (.-innerWidth js/window)
+     ;  :spacing 10
+     ;  :bg bg
+     ;  :fg fg))))
