@@ -42,12 +42,21 @@
  (let [pixi-colour (fn [c] @(col/as-int24 (col/css c)))
        bg (pixi-colour bg)
        fg (pixi-colour fg)
+       n-rows (n width spacing)
+       n-cols (n height spacing)
+       position-array (-> (nd/ndarray
+                           :int8
+                           (repeatedly
+                            (* n-rows n-cols)
+                            #(rand-size spacing))
+                           [n-rows n-cols])
+                          (nd/position-seq))
        renderer (js/PIXI.autoDetectRenderer. width height (clj->js {:transparent true
                                                                     :antialias true
                                                                     :resolution 1
                                                                     :clearBeforeRender true}))
        stage (js/PIXI.Container.)
-       circle (fn [stage x-coord y-coord r]
+       circle (fn [stage x-coord y-coord r-factor]
                (let [x-px (* x-coord spacing)
                      y-px (* y-coord spacing)]
                 (with-let [c (doto (js/PIXI.Graphics.)
@@ -64,10 +73,10 @@
                  (.addChild stage c)
 
                  (letfn [(tween-scale []
-                          (let [next-scale (min (* spacing
-                                                   (/ (pareto 1 1) 10))
-                                                spacing)]
-                           (prn spacing next-scale)
+                          (let [next-scale (* (min (* spacing
+                                                      (/ (pareto 1 1) 10))
+                                                   spacing)
+                                              r-factor)]
                            (doto (js/TWEEN.Tween. (-> c .-scale))
                                  (.to
                                   (clj->js {:x next-scale :y next-scale})
@@ -78,7 +87,9 @@
                                  (.start))))]
                   (tween-scale)))))]
 
-  (circle stage 20 20 spacing)
+  (doseq [[x y] position-array]
+   (circle stage x y (/ (* spacing y) height)))
+
   (letfn [(frame [t]
            (.requestAnimationFrame js/window frame)
            (.update js/TWEEN t)
