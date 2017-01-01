@@ -51,10 +51,12 @@
                             #(rand-size spacing))
                            [n-rows n-cols])
                           (nd/position-seq))
-       renderer (js/PIXI.autoDetectRenderer. width height (clj->js {:transparent true
+       renderer (js/PIXI.autoDetectRenderer. width height (clj->js {:backgroundColor bg
                                                                     :antialias true
                                                                     :resolution 1
-                                                                    :clearBeforeRender true}))
+                                                                    :clearBeforeRender true
+                                                                    :roundPixels true
+                                                                    :forceFXXA true}))
        stage (js/PIXI.Container.)
        circle (fn [stage x-coord y-coord r-factor]
                (let [x-px (* x-coord spacing)
@@ -73,10 +75,13 @@
                  (.addChild stage c)
 
                  (letfn [(tween-scale []
-                          (let [next-scale (* (min (* spacing
-                                                      (/ (pareto 1 1) 10))
-                                                   spacing)
-                                              r-factor)]
+                          (let [next-scale (-> (pareto 1 1)
+                                               (/ 10)
+                                               (* spacing)
+                                               (min spacing)
+                                               (* r-factor)
+                                               (high-pass 1)
+                                               (/ 2))]
                            (doto (js/TWEEN.Tween. (-> c .-scale))
                                  (.to
                                   (clj->js {:x next-scale :y next-scale})
@@ -84,6 +89,7 @@
                                  (.onUpdate #(this-as this
                                               (-> c .-scale (.set (.-x this) (.-y this)))))
                                  (.onComplete tween-scale)
+                                 (.delay (* animation-speed (rand)))
                                  (.start))))]
                   (tween-scale)))))]
 
@@ -97,71 +103,17 @@
    (.requestAnimationFrame js/window frame))
   (.-view renderer)))
 
-(defelem vis
- [{:keys [height width spacing fg bg]} _]
- (let [n-rows (n width spacing)
-       n-cols (n height spacing)
-       gen-rand-array (fn []
-                       (nd/ndarray
-                        :int8
-                        (repeatedly
-                         (* n-rows n-cols)
-                         #(rand-size spacing))
-                        [n-rows n-cols]))
-       rand-arr (cell (gen-rand-array))
-       x-y-r (cell= (map (fn [[x y]]
-                          [(* x spacing)
-                           (* y spacing)
-                           (/ (dec (nd/pick rand-arr x y))
-                              2)])
-                         (nd/position-seq rand-arr)))]
-
-  (swap! rand-arr gen-rand-array)
-  (with-interval animation-speed (swap! rand-arr gen-rand-array))
-
-  (letfn [(circle [x y]
-           (let [calc-r #(/ (dec (nd/pick @rand-arr @x @y))
-                            2)
-                 r (cell (calc-r))
-                 delay-rand (* animation-speed (rand))
-                 delay-total (+ animation-speed delay-rand)]
-
-            (with-timeout delay-rand (swap! r calc-r))
-            (with-interval
-             delay-total
-             (swap! r calc-r))
-
-            (svg/circle
-             :fill fg
-             :cx (cell= (* spacing x))
-             :cy (cell= (* spacing y))
-             :r (cell= (high-pass (/ (* r y spacing) height)
-                                  0.5)))))]
-
-   [
-    (style (str "circle { "
-                "transition: all " (/ animation-speed 1000) "s " easing ";"
-                " }"))
-
-
-    (svg/svg
-     :height height
-     :width width
-     :css {:background-color bg
-           :filter "blur(0.5px)"}
-
-     (for-tpl [[x y] (cell= (nd/position-seq rand-arr))]
-      (circle x y)))])))
-
 (html
   (head
     (link :href "app.css" :rel "stylesheet"))
   (body
-   :css {:background-color bg}
+   :css {:background-color fg}
 
+   (div :css {:height "50vh" :background-color bg})
    (pixi
     :height (/ (.-innerHeight js/window) 3)
     :width (.-innerWidth js/window)
     :spacing 10
     :bg bg
-    :fg fg)))
+    :fg fg)
+   (div :css {:height "100vh" :background-color fg})))
