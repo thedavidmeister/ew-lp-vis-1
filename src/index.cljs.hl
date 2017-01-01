@@ -53,10 +53,7 @@
                           (nd/position-seq))
        renderer (js/PIXI.autoDetectRenderer. width height (clj->js {:backgroundColor bg
                                                                     :antialias true
-                                                                    :resolution 1
-                                                                    :clearBeforeRender true
-                                                                    :roundPixels true
-                                                                    :forceFXXA true}))
+                                                                    :resolution 1}))
        stage (js/PIXI.Container.)
        circle (fn [stage x-coord y-coord r-factor]
                (let [x-px (* x-coord spacing)
@@ -75,12 +72,22 @@
                  (.addChild stage c)
 
                  (letfn [(tween-scale []
-                          (let [next-scale (-> (pareto 1 1)
+                          (let [next-scale (-> ; Set the base distribution.
+                                               (pareto 1 1)
+                                               ; Scale down based on typical
+                                               ; vals from pareto to get closer
+                                               ; to about 1.
                                                (/ 10)
+                                               ; Scale up to match the grid
+                                               ; spacing.
                                                (* spacing)
+                                               ; Don't exceed the grid spacing.
                                                (min spacing)
+                                               ; Apply the r-factor.
                                                (* r-factor)
+                                               ; Hide anything too small.
                                                (high-pass 1)
+                                               ; Convert diameter to radius.
                                                (/ 2))]
                            (doto (js/TWEEN.Tween. (-> c .-scale))
                                  (.to
