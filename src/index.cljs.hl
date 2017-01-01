@@ -2,7 +2,9 @@
  (:require [el.landing-page-vis.dom]
            [hoplon.svg :as svg]
            [thi.ng.ndarray.core :as nd]
-           [cljsjs.pixi]))
+           [cljsjs.pixi]
+           [cljsjs.tween]
+           [thi.ng.color.core :as col]))
 
 (def bg "#102769")
 (def fg "#ff8140")
@@ -35,8 +37,28 @@
      v))
 
 (defelem pixi
- [{:keys [height width spacing fb bg]} _]
- (let [renderer (js/PIXI.autoDetectRenderer. width height)]
+ [{:keys [height width spacing fg bg]} _]
+ (let [pixi-colour (fn [c] @(col/as-int24 (col/css c)))
+       bg (pixi-colour bg)
+       fg (pixi-colour fg)
+       renderer (js/PIXI.autoDetectRenderer. width height (clj->js {:backgroundColor bg
+                                                                    :antialias true}))
+       graphics (js/PIXI.Graphics.)]
+
+
+  (letfn [(frame []
+           (.beginFill graphics fg)
+           (.drawCircle
+            graphics
+            (* width (rand))
+            (* height (rand))
+            5)
+           (.endFill graphics)
+           
+           (.render renderer graphics)
+
+           (.requestAnimationFrame js/window frame))]
+   (.requestAnimationFrame js/window frame))
   (.-view renderer)))
 
 (defelem vis

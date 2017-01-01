@@ -6,7 +6,9 @@
                   [org.clojure/clojurescript "1.9.293"]
                   [tailrecursion/boot-jetty  "0.1.3"]
                   [thi.ng/ndarray "0.3.2"]
-                  [cljsjs/pixi "4.0.3-0"]]
+                  [thi.ng/color "1.2.0"]
+                  [cljsjs/pixi "4.0.3-0"]
+                  [cljsjs/tween "16.3.1"]]
 
   :source-paths #{"src"}
   :asset-paths  #{"assets"})
