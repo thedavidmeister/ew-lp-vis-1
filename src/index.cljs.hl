@@ -51,7 +51,7 @@
                             #(rand-size spacing))
                            [n-rows n-cols])
                           (nd/position-seq))
-       renderer (js/PIXI.autoDetectRenderer. width height (clj->js {:backgroundColor bg
+       renderer (js/PIXI.autoDetectRenderer. width height (clj->js {:transparent true
                                                                     :antialias true
                                                                     :resolution 1}))
        stage (js/PIXI.Container.)
@@ -114,7 +114,7 @@
   (head
     (link :href "app.css" :rel "stylesheet"))
   (body
-   :css {:background-color fg}
+   :css {:background-color bg}
 
    (div :css {:height "50vh" :background-color bg})
    (pixi
