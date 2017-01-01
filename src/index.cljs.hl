@@ -7,7 +7,8 @@
 (def fg "#ff8140")
 ; (def fg "#fff")
 ; http://easings.net/#easeOutBack
-(def easing "cubic-bezier(0.175, 0.885, 0.32, 1.275)")
+; (def easing "cubic-bezier(0.175, 0.885, 0.32, 1.275)")
+(def easing "linear")
 
 (def animation-speed 5000)
 
@@ -60,31 +61,48 @@
                             2)
                  r (cell (calc-r))
                  delay-rand (* animation-speed (rand))
-                 delay-total (+ animation-speed delay-rand)]
+                 delay-total (+ animation-speed delay-rand)
+                 r-processed (cell= (-> r
+                                        (* spacing)
+                                        (* (/ y height))
+                                        (high-pass 0.5)))
+                 x-processed (cell= (* x spacing))
+                 y-processed (cell= (* y spacing))]
 
             (with-timeout delay-rand (swap! r calc-r))
             (with-interval
              delay-total
              (swap! r calc-r))
-
-            (svg/circle
-             :fill fg
-             :cx (cell= (* spacing x))
-             :cy (cell= (* spacing y))
-             :r (cell= (high-pass (/ (* r y spacing) height)
-                                  0.5)))))]
+            (svg/svg
+             :width 1
+             :height 1
+             :css (cell= {
+                          :transform (str "scale(" r-processed ")")
+                          :left (str x-processed "px")
+                          :top (str y-processed "px")
+                          :position "absolute"})
+             (svg/circle
+              :fill fg
+              :cx 0.5
+              :cy 0.5
+              :r 0.5))))]
 
    [
-    (style (str "circle { "
+    (style (str "* { transition: all " (/ animation-speed 1000) "s " easing "; }"
+                ".circle { "
                 "transition: all " (/ animation-speed 1000) "s " easing ";"
+                "position: absolute;"
+                "width: 1px;"
+                "height: 1px;"
+                "color:" fg ";"
                 " }"))
 
 
-    (svg/svg
+    (div
      :height height
      :width width
      :css {:background-color bg
-           :filter "blur(0.5px)"}
+           :filter "blur(0.3px)"}
 
      (for-tpl [[x y] (cell= (nd/position-seq rand-arr))]
       (circle x y)))])))
@@ -94,13 +112,13 @@
     (link :href "app.css" :rel "stylesheet"))
   (body
    :css {:background-color bg}
-    (div
-     :css {:position "fixed" :bottom 0
-           :background-color fg}
+    ; (div
+    ;  :css {:position "fixed" :bottom 0
+    ;        :background-color fg}
 
      (vis
       :height (/ (.-innerHeight js/window) 2.5)
       :width (.-innerWidth js/window)
       :spacing 10
       :bg bg
-      :fg fg))))
+      :fg fg)))
