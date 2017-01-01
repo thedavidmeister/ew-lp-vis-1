@@ -8,9 +8,6 @@
 
 (def bg "#102769")
 (def fg "#ff8140")
-; (def fg "#fff")
-; http://easings.net/#easeOutBack
-(def easing "cubic-bezier(0.175, 0.885, 0.32, 1.275)")
 
 (def animation-speed 3000)
 
@@ -68,6 +65,8 @@
                  ; https://stackoverflow.com/questions/27807718/scale-to-a-specific-point-in-pixi-js
                  (-> c .-position (.set x-px y-px))
 
+                 (-> c .-scale (.set 0 0))
+
                  ; Append the circle to the main stage for rendering.
                  (.addChild stage c)
 
@@ -96,7 +95,6 @@
                                  (.onUpdate #(this-as this
                                               (-> c .-scale (.set (.-x this) (.-y this)))))
                                  (.onComplete tween-scale)
-                                 (.delay (* animation-speed (rand)))
                                  (.start))))]
                   (tween-scale)))))]
 
@@ -116,7 +114,10 @@
   (body
    :css {:background-color bg}
 
-   (div :css {:height "50vh" :background-color bg})
+   (div :css {:height "50vh" :background-color bg}
+    (h1 "Estimate Work"
+     :css {:color "white"
+           :font-family "-apple-system"}))
    (pixi
     :height (/ (.-innerHeight js/window) 3)
     :width (.-innerWidth js/window)
