@@ -1,18 +1,19 @@
 (page "index.html"
  (:require [el.landing-page-vis.dom]
            [hoplon.svg :as svg]
-           [thi.ng.ndarray.core :as nd]))
+           [thi.ng.ndarray.core :as nd]
+           [cljsjs.pixi]
+           [cljsjs.tween]
+           [thi.ng.color.core :as col]))
 
 (def bg "#102769")
 (def fg "#ff8140")
-; (def fg "#fff")
-; http://easings.net/#easeOutBack
-(def easing "cubic-bezier(0.175, 0.885, 0.32, 1.275)")
 
-(def animation-speed 5000)
+(def animation-speed 3000)
 
 (def pareto-a (+ 0.1 (rand)))
 (defn pareto
+ ([] (pareto 1))
  ([xm] (pareto xm nil))
  ([xm a]
   (let [a (or a pareto-a)]
@@ -21,7 +22,7 @@
 (defn rand-size
  [n]
  (min n
-      (pareto 1)))
+      (pareto)))
 
 (defn n
  [total per-item]
@@ -33,74 +34,94 @@
      0
      v))
 
-(defelem vis
+(defelem pixi
  [{:keys [height width spacing fg bg]} _]
- (let [n-rows (n width spacing)
+ (let [pixi-colour (fn [c] @(col/as-int24 (col/css c)))
+       bg (pixi-colour bg)
+       fg (pixi-colour fg)
+       n-rows (n width spacing)
        n-cols (n height spacing)
-       gen-rand-array (fn []
-                       (nd/ndarray
-                        :int8
-                        (repeatedly
-                         (* n-rows n-cols)
-                         #(rand-size spacing))
-                        [n-rows n-cols]))
-       rand-arr (cell (gen-rand-array))
-       x-y-r (cell= (map (fn [[x y]]
-                          [(* x spacing)
-                           (* y spacing)
-                           (/ (dec (nd/pick rand-arr x y))
-                              2)])
-                         (nd/position-seq rand-arr)))]
+       position-array (-> (nd/ndarray
+                           :int8
+                           (repeatedly
+                            (* n-rows n-cols)
+                            #(rand-size spacing))
+                           [n-rows n-cols])
+                          (nd/position-seq))
+       renderer (js/PIXI.autoDetectRenderer. width height (clj->js {:transparent true
+                                                                    :antialias true
+                                                                    :resolution 1}))
+       stage (js/PIXI.Container.)
+       circle (fn [stage x-coord y-coord r-factor]
+               (let [x-px (* x-coord spacing)
+                     y-px (* y-coord spacing)]
+                (with-let [c (doto (js/PIXI.Graphics.)
+                                   (.beginFill fg)
+                                   (.drawCircle 0 0 1)
+                                   (.endFill))]
 
-  (swap! rand-arr gen-rand-array)
-  (with-interval animation-speed (swap! rand-arr gen-rand-array))
+                 ; Use position of the graphics instead of x/y of the circle to
+                 ; make scaling work as centered.
+                 ; https://stackoverflow.com/questions/27807718/scale-to-a-specific-point-in-pixi-js
+                 (-> c .-position (.set x-px y-px))
 
-  (letfn [(circle [x y]
-           (let [calc-r #(/ (dec (nd/pick @rand-arr @x @y))
-                            2)
-                 r (cell (calc-r))
-                 delay-rand (* animation-speed (rand))
-                 delay-total (+ animation-speed delay-rand)]
+                 (-> c .-scale (.set 0 0))
 
-            (with-timeout delay-rand (swap! r calc-r))
-            (with-interval
-             delay-total
-             (swap! r calc-r))
+                 ; Append the circle to the main stage for rendering.
+                 (.addChild stage c)
 
-            (svg/circle
-             :fill fg
-             :cx (cell= (* spacing x))
-             :cy (cell= (* spacing y))
-             :r (cell= (high-pass (/ (* r y spacing) height)
-                                  0.5)))))]
+                 (letfn [(tween-scale []
+                          (let [next-scale (-> ; Set the base distribution.
+                                               (pareto 1 0.75)
+                                               ; Scale down based on typical
+                                               ; vals from pareto to get closer
+                                               ; to about 1.
+                                               (/ 10)
+                                               ; Scale up to match the grid
+                                               ; spacing.
+                                               (* spacing)
+                                               ; Don't exceed the grid spacing.
+                                               (min spacing)
+                                               ; Apply the r-factor.
+                                               (* r-factor)
+                                               ; Hide anything too small.
+                                               (high-pass 1)
+                                               ; Convert diameter to radius.
+                                               (/ 2))]
+                           (doto (js/TWEEN.Tween. (-> c .-scale))
+                                 (.to
+                                  (clj->js {:x next-scale :y next-scale})
+                                  animation-speed)
+                                 (.onUpdate #(this-as this
+                                              (-> c .-scale (.set (.-x this) (.-y this)))))
+                                 (.onComplete tween-scale)
+                                 (.start))))]
+                  (tween-scale)))))]
 
-   [
-    (style (str "circle { "
-                "transition: all " (/ animation-speed 1000) "s " easing ";"
-                " }"))
+  (doseq [[x y] position-array]
+   (circle stage x y (/ (* spacing y) height)))
 
-
-    (svg/svg
-     :height height
-     :width width
-     :css {:background-color bg
-           :filter "blur(0.5px)"}
-
-     (for-tpl [[x y] (cell= (nd/position-seq rand-arr))]
-      (circle x y)))])))
+  (letfn [(frame [t]
+           (.requestAnimationFrame js/window frame)
+           (.update js/TWEEN t)
+           (.render renderer stage))]
+   (.requestAnimationFrame js/window frame))
+  (.-view renderer)))
 
 (html
   (head
     (link :href "app.css" :rel "stylesheet"))
   (body
    :css {:background-color bg}
-    (div
-     :css {:position "fixed" :bottom 0
-           :background-color fg}
 
-     (vis
-      :height (/ (.-innerHeight js/window) 2.5)
-      :width (.-innerWidth js/window)
-      :spacing 10
-      :bg bg
-      :fg fg))))
+   (div :css {:height "50vh" :background-color bg}
+    (h1 "Estimate Work"
+     :css {:color "white"
+           :font-family "-apple-system"}))
+   (pixi
+    :height (/ (.-innerHeight js/window) 3)
+    :width (.-innerWidth js/window)
+    :spacing 10
+    :bg bg
+    :fg fg)
+   (div :css {:height "100vh" :background-color fg})))
