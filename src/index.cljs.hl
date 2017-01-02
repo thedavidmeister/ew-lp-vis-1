@@ -4,6 +4,7 @@
            [thi.ng.ndarray.core :as nd]
            [cljsjs.pixi]
            [cljsjs.tween]
+           [tween.core]
            [thi.ng.color.core :as col]))
 
 (def bg "#102769")
@@ -54,7 +55,25 @@
        stage (js/PIXI.Container.)
        circle (fn [stage x-coord y-coord r-factor]
                (let [x-px (* x-coord spacing)
-                     y-px (* y-coord spacing)]
+                     y-px (* y-coord spacing)
+                     next-scale #(-> (pareto 1 0.75)
+                                     ; Scale down based on typical vals from pareto to get
+                                     ; closer to about 1.
+                                     (/ 10)
+                                     ; Scale up to match the grid spacing.
+                                     (* spacing)
+                                     ; Don't exceed the grid spacing.
+                                     (min spacing)
+                                     ; Apply the r-factor.
+                                     (* r-factor)
+                                     ; Hide anything too small.
+                                     (high-pass 1)
+                                     ; Convert diameter to radius.
+                                     (/ 2))
+                     tween= (tween.core/tween-cell {:from 0
+                                                    :to (next-scale)
+                                                    :duration animation-speed
+                                                    :cb (fn [c] (reset! c (next-scale)))})]
                 (with-let [c (doto (js/PIXI.Graphics.)
                                    (.beginFill fg)
                                    (.drawCircle 0 0 1)
@@ -65,45 +84,16 @@
                  ; https://stackoverflow.com/questions/27807718/scale-to-a-specific-point-in-pixi-js
                  (-> c .-position (.set x-px y-px))
 
-                 (-> c .-scale (.set 0 0))
+                 (cell= (-> c .-scale (.set tween= tween=)))
 
                  ; Append the circle to the main stage for rendering.
-                 (.addChild stage c)
-
-                 (letfn [(tween-scale []
-                          (let [next-scale (-> ; Set the base distribution.
-                                               (pareto 1 0.75)
-                                               ; Scale down based on typical
-                                               ; vals from pareto to get closer
-                                               ; to about 1.
-                                               (/ 10)
-                                               ; Scale up to match the grid
-                                               ; spacing.
-                                               (* spacing)
-                                               ; Don't exceed the grid spacing.
-                                               (min spacing)
-                                               ; Apply the r-factor.
-                                               (* r-factor)
-                                               ; Hide anything too small.
-                                               (high-pass 1)
-                                               ; Convert diameter to radius.
-                                               (/ 2))]
-                           (doto (js/TWEEN.Tween. (-> c .-scale))
-                                 (.to
-                                  (clj->js {:x next-scale :y next-scale})
-                                  animation-speed)
-                                 (.onUpdate #(this-as this
-                                              (-> c .-scale (.set (.-x this) (.-y this)))))
-                                 (.onComplete tween-scale)
-                                 (.start))))]
-                  (tween-scale)))))]
+                 (.addChild stage c))))]
 
   (doseq [[x y] position-array]
    (circle stage x y (/ (* spacing y) height)))
 
   (letfn [(frame [t]
            (.requestAnimationFrame js/window frame)
-           (.update js/TWEEN t)
            (.render renderer stage))]
    (.requestAnimationFrame js/window frame))
   (.-view renderer)))
