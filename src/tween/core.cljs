@@ -3,8 +3,8 @@
            [hoplon.core :as h]
            [thi.ng.ndarray.core :as nd]))
 
-(def animation-speed 3000)
-(def fps (/ 1000 10))
+(def animation-speed 5000)
+(def fps (/ 1000 15))
 
 ; Not actually 0 but performance.now() returns values larger than the first
 ; frame of RAF, even before we've called RAF.
@@ -16,7 +16,7 @@
 (defn update-ts!
  ([] (update-ts! animation-speed))
  ([duration]
-  (j/dosync 
+  (j/dosync
    (reset! t-a @t)
    (reset! t-b (+ @t duration)))))
 

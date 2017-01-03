@@ -4,5 +4,14 @@ body {
 }
 
 h1 {
-    color: blue;
+    color: white;
+}
+
+canvas {
+  float: left;
+}
+
+div {
+  float: left;
+  width: 100%;
 }

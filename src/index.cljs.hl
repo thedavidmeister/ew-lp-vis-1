@@ -27,7 +27,7 @@
 
 (defn n
  [total per-item]
- (+ 2 (quot total per-item)))
+ (inc (quot total per-item)))
 
 (defn high-pass
  [v l]
@@ -53,15 +53,14 @@
                                        (.drawCircle 0 0 r)
                                        (.endFill))]
                      (-> c .-position (.set x y))
-                     (-> c .-cacheAsBitmap (set! true))
+                     ; (-> c .-cacheAsBitmap (set! true))
                      (.addChild g c)))
 
-       ; pixi-circles (nd/ndarray :generic (repeatedly nn pixi-circle) [n-rows n-cols])
-       rand-scale #(-> (pareto 1 0.75)
+       rand-scale #(-> (pareto 1)
                        (/ 10)
                        ; (* spacing)
                        (min 1)
-                       ; (high-pass 1)
+                       (high-pass (/ 1 spacing))
                        (/ 2))
 
        rand-grid #(nd/ndarray :float32 (repeatedly nn rand-scale) [n-rows n-cols])
@@ -72,7 +71,13 @@
                       vs-a
                       vs-b))
        i-x-y-r (cell= (map-indexed
-                       (fn [i v] (let [[x y] (nd/index-pos vs-a i)] [i (* spacing x) (* spacing y) v]))
+                       (fn [i v]
+                        (let [[x y] (nd/index-pos vs-a i)]
+                         [i
+                          (* spacing x)
+                          (- (+ (rem height spacing) (* spacing y))
+                             (/ spacing 2))
+                          v]))
                        vs))
 
        cs (doall
@@ -83,7 +88,8 @@
    (dosync
     (doall
      (map (fn [[i x y r] c]
-           (-> c .-scale (.set r r)))
+           (let [s (* r (/ y height))]
+            (-> c .-scale (.set s s))))
           i-x-y-r
           cs))))
 
@@ -113,7 +119,7 @@
    (pixi
     :height (/ (.-innerHeight js/window) 3)
     :width (.-innerWidth js/window)
-    :spacing 10
+    :spacing 15
     :bg bg
     :fg fg)
    (div :css {:height "100vh" :background-color fg})))
