@@ -25,10 +25,6 @@
  (min n
       (pareto)))
 
-(defn n
- [total per-item]
- (inc (quot total per-item)))
-
 (defn high-pass
  [v l]
  (if (<= v l)
@@ -37,9 +33,13 @@
 
 (defelem pixi
  [{:keys [height width spacing fg bg]} _]
- (let [pixi-colour (fn [c] @(col/as-int24 (col/css c)))
+ (let [; Converting CSS colours to something Pixi friendly.
+       pixi-colour (fn [c] @(col/as-int24 (col/css c)))
        bg (pixi-colour bg)
        fg (pixi-colour fg)
+
+       ; Build the grid.
+       n (fn [total cell] (inc (quot total cell)))
        n-rows (n width spacing)
        n-cols (n height spacing)
        nn (* n-rows n-cols)
