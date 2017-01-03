@@ -4,6 +4,7 @@
            [thi.ng.ndarray.core :as nd]
            [cljsjs.pixi]
            [cljsjs.tween]
+           [tween.core]
            [thi.ng.color.core :as col]))
 
 (def bg "#102769")
@@ -41,70 +42,61 @@
        fg (pixi-colour fg)
        n-rows (n width spacing)
        n-cols (n height spacing)
-       position-array (-> (nd/ndarray
-                           :int8
-                           (repeatedly
-                            (* n-rows n-cols)
-                            #(rand-size spacing))
-                           [n-rows n-cols])
-                          (nd/position-seq))
+       nn (* n-rows n-cols)
        renderer (js/PIXI.autoDetectRenderer. width height (clj->js {:transparent true
                                                                     :antialias true
                                                                     :resolution 1}))
        stage (js/PIXI.Container.)
-       circle (fn [stage x-coord y-coord r-factor]
-               (let [x-px (* x-coord spacing)
-                     y-px (* y-coord spacing)]
-                (with-let [c (doto (js/PIXI.Graphics.)
-                                   (.beginFill fg)
-                                   (.drawCircle 0 0 1)
-                                   (.endFill))]
+       pixi-circle (fn [g x y r]
+                    (with-let [c (doto (js/PIXI.Graphics.)
+                                       (.beginFill fg)
+                                       (.drawCircle 0 0 r)
+                                       (.endFill))]
+                     (-> c .-position (.set x y))
+                     (-> c .-cacheAsBitmap (set! true))
+                     (.addChild g c)))
 
-                 ; Use position of the graphics instead of x/y of the circle to
-                 ; make scaling work as centered.
-                 ; https://stackoverflow.com/questions/27807718/scale-to-a-specific-point-in-pixi-js
-                 (-> c .-position (.set x-px y-px))
+       ; pixi-circles (nd/ndarray :generic (repeatedly nn pixi-circle) [n-rows n-cols])
+       rand-scale #(-> (pareto 1 0.75)
+                       (/ 10)
+                       ; (* spacing)
+                       (min 1)
+                       ; (high-pass 1)
+                       (/ 2))
 
-                 (-> c .-scale (.set 0 0))
+       rand-grid #(nd/ndarray :float32 (repeatedly nn rand-scale) [n-rows n-cols])
+       vs-a (cell (nd/ndarray :int8 (repeat nn 0) [n-rows n-cols]))
+       vs-b (cell (rand-grid))
+       next-vs! #(dosync (reset! vs-a @vs-b) (swap! vs-b rand-grid))
+       vs (cell= (map (fn [a b] (+ a (* tween.core/p (- b a))))
+                      vs-a
+                      vs-b))
+       i-x-y-r (cell= (map-indexed
+                       (fn [i v] (let [[x y] (nd/index-pos vs-a i)] [i (* spacing x) (* spacing y) v]))
+                       vs))
 
-                 ; Append the circle to the main stage for rendering.
-                 (.addChild stage c)
+       cs (doall
+           (for [[i x y r] @i-x-y-r]
+            (pixi-circle stage x y spacing)))]
 
-                 (letfn [(tween-scale []
-                          (let [next-scale (-> ; Set the base distribution.
-                                               (pareto 1 0.75)
-                                               ; Scale down based on typical
-                                               ; vals from pareto to get closer
-                                               ; to about 1.
-                                               (/ 10)
-                                               ; Scale up to match the grid
-                                               ; spacing.
-                                               (* spacing)
-                                               ; Don't exceed the grid spacing.
-                                               (min spacing)
-                                               ; Apply the r-factor.
-                                               (* r-factor)
-                                               ; Hide anything too small.
-                                               (high-pass 1)
-                                               ; Convert diameter to radius.
-                                               (/ 2))]
-                           (doto (js/TWEEN.Tween. (-> c .-scale))
-                                 (.to
-                                  (clj->js {:x next-scale :y next-scale})
-                                  animation-speed)
-                                 (.onUpdate #(this-as this
-                                              (-> c .-scale (.set (.-x this) (.-y this)))))
-                                 (.onComplete tween-scale)
-                                 (.start))))]
-                  (tween-scale)))))]
+  (cell=
+   (dosync
+    (doall
+     (map (fn [[i x y r] c]
+           (-> c .-scale (.set r r)))
+          i-x-y-r
+          cs))))
 
-  (doseq [[x y] position-array]
-   (circle stage x y (/ (* spacing y) height)))
+  (cell= (when (= 1 tween.core/p)
+               (dosync
+                (next-vs!)
+                (tween.core/update-ts!))))
 
   (letfn [(frame [t]
            (.requestAnimationFrame js/window frame)
-           (.update js/TWEEN t)
-           (.render renderer stage))]
+           (when @tween.core/dirty
+            (.render renderer stage)
+            (reset! tween.core/dirty false)))]
    (.requestAnimationFrame js/window frame))
   (.-view renderer)))
 
