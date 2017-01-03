@@ -4,14 +4,13 @@
            [thi.ng.ndarray.core :as nd]
            [cljsjs.pixi]
            [cljsjs.tween]
-           [tween.core]
            [thi.ng.color.core :as col]))
 
 (def bg "#102769")
 (def fg "#ff8140")
 
 (defelem pixi
- [{:keys [height width spacing fg bg]} _]
+ [{:keys [height width spacing fg bg duration fps]} _]
  (let [; Converting CSS colours to something Pixi friendly.
        pixi-colour (fn [c] @(col/as-int24 (col/css c)))
        bg (pixi-colour bg)
@@ -25,11 +24,37 @@
                            :antialias true}))
        stage (js/PIXI.Container.)
 
+       ; Animation calculations loop.
+       duration (or duration 5000)
+       fps (or fps 15)
+       interval (/ 1000 fps)
+       t (cell 1)
+       t-a (cell 1)
+       t-b (cell 2)
+       update-ts! #(dosync
+                    (reset! t-a @t)
+                    (reset! t-b (+ @t duration)))
+       frame (letfn [(frame []
+                      (with-timeout interval (frame))
+                      (reset! t (-> js/window .-performance .now)))]
+              (with-timeout interval (frame))
+              frame)
+       dirty (cell true)
+       dirty! #(reset! dirty true)
+       p (with-let [p (cell= (-> (/ (- t t-a) (- t-b t-a))
+                                 (min 1)
+                                 (max 0)))]
+          (cell= (when p (dirty!))))
+
        ; Build the grid.
        n (fn [total cell] (inc (quot total cell)))
+       ; How many rows?
        n-rows (n width spacing)
+       ; How many columns?
        n-cols (n height spacing)
+       ; How many cells?
        nn (* n-rows n-cols)
+       ; A very basic high pass filter, sets everything below the limit to 0.
        high-pass (fn [v l] (if (<= v l) 0 v))
        ; https://en.wikipedia.org/wiki/Pareto_distribution#Random_sample_generation
        ; pareto-a (+ 0.1 (rand))
@@ -39,6 +64,7 @@
                (let [xm 1
                      a pareto-a]
                 (/ xm (.pow js/Math (rand) (/ 1 a)))))
+       ; Generates a random new scale for a single circle to tween towards.
        rand-scale #(-> (pareto)
                        (/ 10)
                        ; Limit the scale to 1.
@@ -48,15 +74,24 @@
                        (high-pass (/ 2 spacing))
                        ; Convert diameter to radius.
                        (/ 2))
+       ; Generates a 2D grid of random scales.
        rand-grid #(nd/ndarray :float32 (repeatedly nn rand-scale) [n-rows n-cols])
+       ; Starting point is a 2D grid with 0 scale everywhere.
        vs-a (cell (nd/ndarray :int8 (repeat nn 0) [n-rows n-cols]))
+       ; First tween is a random grid.
        vs-b (cell (rand-grid))
+       ; Copies the old endpoint to the new start point. Generates a new
+       ; endpoint as a random scale grid.
        next-vs! #(dosync
                   (reset! vs-a @vs-b)
                   (swap! vs-b rand-grid))
-       vs (cell= (map (fn [a b] (+ a (* tween.core/p (- b a))))
+       ; All the tween values between v-a and v-b as a seq, based on the current
+       ; value of p.
+       vs (cell= (map (fn [a b] (+ a (* p (- b a))))
                       vs-a
                       vs-b))
+       ; Seq index, Xpx, Ypx, radius/scale as a seq to map all the vs back to
+       ; the grid in a useful format for circles.
        i-x-y-r (cell= (map-indexed
                        (fn [i v]
                         (let [[x y] (nd/index-pos vs-a i)]
@@ -76,9 +111,11 @@
                      (-> c .-position (.set x y))
                      (.addChild g c)))
 
+       ; A sequence of all the circles in the grid.
        cs (for [[i x y r] @i-x-y-r]
            (pixi-circle stage x y spacing))]
 
+  ; Update the scales of all the circles.
   (cell=
    (doall
     (map (fn [[i x y r] c]
@@ -87,17 +124,22 @@
          i-x-y-r
          cs)))
 
-  (cell= (when (= 1 tween.core/p)
-               (dosync
-                (next-vs!)
-                (tween.core/update-ts!))))
+  ; Loop is over, start again...
+  (cell= (when (= 1 p)
+          (dosync
+           (next-vs!)
+           (update-ts!))))
 
+  ; RAF loop. Only triggers a render if p has progressed, otherwise this can
+  ; really thrash the CPU.
   (letfn [(frame [t]
            (.requestAnimationFrame js/window frame)
-           (when @tween.core/dirty
+           (when @dirty
             (.render renderer stage)
-            (reset! tween.core/dirty false)))]
+            (reset! dirty false)))]
    (.requestAnimationFrame js/window frame))
+
+  ; Return the view of the renderer.
   (.-view renderer)))
 
 (html
@@ -115,5 +157,7 @@
     :width (.-innerWidth js/window)
     :spacing 15
     :bg bg
-    :fg fg)
+    :fg fg
+    :duration 5000
+    :fps 15)
    (div :css {:height "100vh" :background-color fg})))
