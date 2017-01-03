@@ -12,14 +12,6 @@
 
 (def animation-speed 3000)
 
-(def pareto-a (+ 0.1 (rand)))
-(defn pareto
- ([] (pareto 1))
- ([xm] (pareto xm nil))
- ([xm a]
-  (let [a (or a pareto-a)]
-   (/ xm (.pow js/Math (rand) (/ 1 a))))))
-
 (defelem pixi
  [{:keys [height width spacing fg bg]} _]
  (let [; Converting CSS colours to something Pixi friendly.
@@ -41,7 +33,15 @@
        n-cols (n height spacing)
        nn (* n-rows n-cols)
        high-pass (fn [v l] (if (<= v l) 0 v))
-       rand-scale #(-> (pareto 1)
+       ; https://en.wikipedia.org/wiki/Pareto_distribution#Random_sample_generation
+       ; pareto-a (+ 0.1 (rand))
+       ; 80/20
+       pareto-a 1.161
+       pareto (fn []
+               (let [xm 1
+                     a pareto-a]
+                (/ xm (.pow js/Math (rand) (/ 1 a)))))
+       rand-scale #(-> (pareto)
                        (/ 10)
                        ; Limit the scale to 1.
                        (min 1)
