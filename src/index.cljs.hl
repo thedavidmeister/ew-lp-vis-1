@@ -10,8 +10,6 @@
 (def bg "#102769")
 (def fg "#ff8140")
 
-(def animation-speed 3000)
-
 (defelem pixi
  [{:keys [height width spacing fg bg]} _]
  (let [; Converting CSS colours to something Pixi friendly.
