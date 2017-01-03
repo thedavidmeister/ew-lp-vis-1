@@ -4,7 +4,7 @@
            [thi.ng.ndarray.core :as nd]))
 
 (def animation-speed 3000)
-(def fps (/ 1000 30))
+(def fps (/ 1000 10))
 
 ; Not actually 0 but performance.now() returns values larger than the first
 ; frame of RAF, even before we've called RAF.
@@ -13,9 +13,12 @@
 (def t-a (j/cell 1))
 (def t-b (j/cell 2))
 
-(defn update-ts
- [duration]
- (j/dosync (reset! t-a @t) (reset! t-b (+ @t duration))))
+(defn update-ts!
+ ([] (update-ts! animation-speed))
+ ([duration]
+  (j/dosync 
+   (reset! t-a @t)
+   (reset! t-b (+ @t duration)))))
 
 (letfn [(frame []
          (h/with-timeout fps (frame))
@@ -27,9 +30,5 @@
 (def p (j/cell= (-> (/ (- t t-a) (- t-b t-a))
                     (min 1)
                     (max 0))))
-                    ; (* fps)
-                    ; int
-                    ; (/ fps))))
-(j/cell= (when p (dirty!)))
 
-(j/cell= (when (= 1 p) (update-ts animation-speed)))
+(j/cell= (when p (dirty!)))
