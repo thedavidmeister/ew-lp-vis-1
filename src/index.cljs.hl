@@ -46,12 +46,16 @@
        renderer (js/PIXI.autoDetectRenderer. width height (clj->js {:transparent true
                                                                     :antialias true
                                                                     :resolution 1}))
-       stage (js/PIXI.Graphics.)
+       stage (js/PIXI.Container.)
        pixi-circle (fn [g x y r]
-                    (doto g
-                          (.beginFill fg)
-                          (.drawCircle x y r)
-                          (.endFill)))
+                    (with-let [c (doto (js/PIXI.Graphics.)
+                                       (.beginFill fg)
+                                       (.drawCircle 0 0 r)
+                                       (.endFill))]
+                     (-> c .-position (.set x y))
+                     (-> c .-cacheAsBitmap (set! true))
+                     (.addChild g c)))
+
        ; pixi-circles (nd/ndarray :generic (repeatedly nn pixi-circle) [n-rows n-cols])
        rand-scale #(-> (pareto 1 0.75)
                        (/ 10)
@@ -60,29 +64,37 @@
                        (high-pass 1)
                        (/ 2))
 
-       rand-grid #(nd/ndarray :float32 (repeatedly (* n-rows n-cols) rand-scale) [n-rows n-cols])
+       rand-grid #(nd/ndarray :float32 (repeatedly nn rand-scale) [n-rows n-cols])
        vs-a (cell (nd/ndarray :int8 (repeat nn 0) [n-rows n-cols]))
        vs-b (cell (rand-grid))
        next-vs! #(dosync (reset! vs-a @vs-b) (swap! vs-b rand-grid))
        vs (cell= (map (fn [a b] (+ a (* tween.core/p (- b a))))
                       vs-a
                       vs-b))
-       x-y-r (cell= (map-indexed
-                     (fn [i v] (let [[x y] (nd/index-pos vs-a i)] [(* spacing x) (* spacing y) v]))
-                     vs))]
+       i-x-y-r (cell= (map-indexed
+                       (fn [i v] (let [[x y] (nd/index-pos vs-a i)] [i (* spacing x) (* spacing y) v]))
+                       vs))
+
+       cs (doall
+           (for [[i x y r] @i-x-y-r]
+            (pixi-circle stage x y 1)))]
 
   (cell=
    (dosync
-    (.clear stage)
-    (doseq [[x y r] x-y-r]
-     (when-not (zero? r) (pixi-circle stage x y r)))))
+    (doall
+     (map (fn [[i x y r] c]
+           (-> c .-scale (.set r r)))
+          i-x-y-r
+          cs))))
 
   (cell= (when (= 0 tween.core/p)
                (next-vs!)))
 
   (letfn [(frame [t]
            (.requestAnimationFrame js/window frame)
-           (.render renderer stage))]
+           (when @tween.core/dirty
+            (.render renderer stage)
+            (reset! tween.core/dirty false)))]
    (.requestAnimationFrame js/window frame))
   (.-view renderer)))
 
