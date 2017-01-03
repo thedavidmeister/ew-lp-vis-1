@@ -25,12 +25,6 @@
  (min n
       (pareto)))
 
-(defn high-pass
- [v l]
- (if (<= v l)
-     0
-     v))
-
 (defelem pixi
  [{:keys [height width spacing fg bg]} _]
  (let [; Converting CSS colours to something Pixi friendly.
@@ -38,35 +32,35 @@
        bg (pixi-colour bg)
        fg (pixi-colour fg)
 
+       ; Init pixi.js
+       renderer (js/PIXI.autoDetectRenderer.
+                 width
+                 height
+                 (clj->js {:transparent true
+                           :antialias true}))
+       stage (js/PIXI.Container.)
+
        ; Build the grid.
        n (fn [total cell] (inc (quot total cell)))
        n-rows (n width spacing)
        n-cols (n height spacing)
        nn (* n-rows n-cols)
-       renderer (js/PIXI.autoDetectRenderer. width height (clj->js {:transparent true
-                                                                    :antialias true
-                                                                    :resolution 1}))
-       stage (js/PIXI.Container.)
-       pixi-circle (fn [g x y r]
-                    (with-let [c (doto (js/PIXI.Graphics.)
-                                       (.beginFill fg)
-                                       (.drawCircle 0 0 r)
-                                       (.endFill))]
-                     (-> c .-position (.set x y))
-                     ; (-> c .-cacheAsBitmap (set! true))
-                     (.addChild g c)))
-
+       high-pass (fn [v l] (if (<= v l) 0 v))
        rand-scale #(-> (pareto 1)
                        (/ 10)
-                       ; (* spacing)
+                       ; Limit the scale to 1.
                        (min 1)
-                       (high-pass (/ 1 spacing))
+                       ; Apply a high pass to filter out the smallest dots. This
+                       ; gives us more "true black" in the animation.
+                       (high-pass (/ 2 spacing))
+                       ; Convert diameter to radius.
                        (/ 2))
-
        rand-grid #(nd/ndarray :float32 (repeatedly nn rand-scale) [n-rows n-cols])
        vs-a (cell (nd/ndarray :int8 (repeat nn 0) [n-rows n-cols]))
        vs-b (cell (rand-grid))
-       next-vs! #(dosync (reset! vs-a @vs-b) (swap! vs-b rand-grid))
+       next-vs! #(dosync
+                  (reset! vs-a @vs-b)
+                  (swap! vs-b rand-grid))
        vs (cell= (map (fn [a b] (+ a (* tween.core/p (- b a))))
                       vs-a
                       vs-b))
@@ -80,18 +74,25 @@
                           v]))
                        vs))
 
-       cs (doall
-           (for [[i x y r] @i-x-y-r]
-            (pixi-circle stage x y spacing)))]
+       ; Render circles with pixi.
+       pixi-circle (fn [g x y r]
+                    (with-let [c (doto (js/PIXI.Graphics.)
+                                       (.beginFill fg)
+                                       (.drawCircle 0 0 r)
+                                       (.endFill))]
+                     (-> c .-position (.set x y))
+                     (.addChild g c)))
+
+       cs (for [[i x y r] @i-x-y-r]
+           (pixi-circle stage x y spacing))]
 
   (cell=
-   (dosync
-    (doall
-     (map (fn [[i x y r] c]
-           (let [s (* r (/ y height))]
-            (-> c .-scale (.set s s))))
-          i-x-y-r
-          cs))))
+   (doall
+    (map (fn [[i x y r] c]
+          (let [s (* r (/ y height))]
+           (-> c .-scale (.set s s))))
+         i-x-y-r
+         cs)))
 
   (cell= (when (= 1 tween.core/p)
                (dosync
