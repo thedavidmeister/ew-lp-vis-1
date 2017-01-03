@@ -20,11 +20,6 @@
   (let [a (or a pareto-a)]
    (/ xm (.pow js/Math (rand) (/ 1 a))))))
 
-(defn rand-size
- [n]
- (min n
-      (pareto)))
-
 (defelem pixi
  [{:keys [height width spacing fg bg]} _]
  (let [; Converting CSS colours to something Pixi friendly.
