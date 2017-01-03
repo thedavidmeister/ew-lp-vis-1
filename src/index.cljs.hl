@@ -42,55 +42,43 @@
        fg (pixi-colour fg)
        n-rows (n width spacing)
        n-cols (n height spacing)
-       position-array (-> (nd/ndarray
-                           :int8
-                           (repeatedly
-                            (* n-rows n-cols)
-                            #(rand-size spacing))
-                           [n-rows n-cols])
-                          (nd/position-seq))
+       nn (* n-rows n-cols)
        renderer (js/PIXI.autoDetectRenderer. width height (clj->js {:transparent true
                                                                     :antialias true
                                                                     :resolution 1}))
-       stage (js/PIXI.Container.)
-       circle (fn [stage x-coord y-coord r-factor]
-               (let [x-px (* x-coord spacing)
-                     y-px (* y-coord spacing)
-                     next-scale #(-> (pareto 1 0.75)
-                                     ; Scale down based on typical vals from pareto to get
-                                     ; closer to about 1.
-                                     (/ 10)
-                                     ; Scale up to match the grid spacing.
-                                     (* spacing)
-                                     ; Don't exceed the grid spacing.
-                                     (min spacing)
-                                     ; Apply the r-factor.
-                                     (* r-factor)
-                                     ; Hide anything too small.
-                                     (high-pass 1)
-                                     ; Convert diameter to radius.
-                                     (/ 2))
-                     tween= (tween.core/tween-cell {:from 0
-                                                    :to (next-scale)
-                                                    :duration animation-speed
-                                                    :cb (fn [c] (reset! c (next-scale)))})]
-                (with-let [c (doto (js/PIXI.Graphics.)
-                                   (.beginFill fg)
-                                   (.drawCircle 0 0 1)
-                                   (.endFill))]
+       stage (js/PIXI.Graphics.)
+       pixi-circle (fn [g x y r]
+                    (doto g
+                          (.beginFill fg)
+                          (.drawCircle x y r)
+                          (.endFill)))
+       ; pixi-circles (nd/ndarray :generic (repeatedly nn pixi-circle) [n-rows n-cols])
+       rand-scale #(-> (pareto 1 0.75)
+                       (/ 10)
+                       (* spacing)
+                       (min spacing)
+                       (high-pass 1)
+                       (/ 2))
 
-                 ; Use position of the graphics instead of x/y of the circle to
-                 ; make scaling work as centered.
-                 ; https://stackoverflow.com/questions/27807718/scale-to-a-specific-point-in-pixi-js
-                 (-> c .-position (.set x-px y-px))
+       rand-grid #(nd/ndarray :float32 (repeatedly (* n-rows n-cols) rand-scale) [n-rows n-cols])
+       vs-a (cell (nd/ndarray :int8 (repeat nn 0) [n-rows n-cols]))
+       vs-b (cell (rand-grid))
+       next-vs! #(dosync (reset! vs-a @vs-b) (swap! vs-b rand-grid))
+       vs (cell= (map (fn [a b] (+ a (* tween.core/p (- b a))))
+                      vs-a
+                      vs-b))
+       x-y-r (cell= (map-indexed
+                     (fn [i v] (let [[x y] (nd/index-pos vs-a i)] [(* spacing x) (* spacing y) v]))
+                     vs))]
 
-                 (cell= (-> c .-scale (.set tween= tween=)))
+  (cell=
+   (dosync
+    (.clear stage)
+    (doseq [[x y r] x-y-r]
+     (when-not (zero? r) (pixi-circle stage x y r)))))
 
-                 ; Append the circle to the main stage for rendering.
-                 (.addChild stage c))))]
-
-  (doseq [[x y] position-array]
-   (circle stage x y (/ (* spacing y) height)))
+  (cell= (when (= 0 tween.core/p)
+               (next-vs!)))
 
   (letfn [(frame [t]
            (.requestAnimationFrame js/window frame)
